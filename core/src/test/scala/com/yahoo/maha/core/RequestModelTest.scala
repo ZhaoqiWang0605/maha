@@ -14,6 +14,11 @@ import com.yahoo.maha.core.fact.{FactCol, _}
 import com.yahoo.maha.core.query.{InnerJoin, LeftOuterJoin, RightOuterJoin}
 import com.yahoo.maha.core.registry.{Registry, RegistryBuilder}
 import com.yahoo.maha.core.request._
+//import com.yahoo.maha.core.OracleEngine
+import com.yahoo.maha.core.query.oracle.BaseOracleQueryGeneratorTest
+import com.yahoo.maha.service.example.ExampleSchema.StudentSchema
+import com.yahoo.maha.service.example.SampleFactSchemaRegistrationFactory
+import com.yahoo.maha.service.example.SampleDimensionSchemaRegistrationFactory
 import org.joda.time.{DateTime, DateTimeZone}
 import org.json4s.JObject
 import org.scalatest.funsuite.AnyFunSuite
@@ -21,6 +26,7 @@ import org.scalatest.matchers.should.Matchers
 import org.mockito.Mockito.{spy, times, verify}
 import org.mockito.Matchers.any
 
+//import scala.concurrent.ExecutionContext
 import scala.util.{Random, Try}
 
 /**
@@ -496,6 +502,16 @@ class RequestModelTest extends AnyFunSuite with Matchers {
                       , revision: Option[Int] = None): Try[RequestModel] = {
     RequestModel.from(request, registry, userTimeZoneProvider, utcTimeProvider, revision)
   }
+
+//  def defaultFactEngine: Engine = OracleEngine
+//  val druidMultiQueryEngineList = DefaultQueryPipelineFactory.druidMultiQueryEngineList
+//  implicit val queryGeneratorRegistry = new QueryGeneratorRegistry
+//  implicit val executionContext: ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(10))
+//  lazy val queryPipelineFactory = new DefaultQueryPipelineFactory(defaultFactEngine = defaultFactEngine, druidMultiQueryEngineList = Seq(defaultFactEngine))
+//
+//  def generatePipeline(requestModel: RequestModel) : Try[QueryPipeline] = {
+//    queryPipelineFactory.from(requestModel, QueryAttributes.empty)
+//  }
 
   lazy val defaultRegistry: Registry = getDefaultRegistry()
 
@@ -6130,6 +6146,162 @@ class RequestModelTest extends AnyFunSuite with Matchers {
     }
   }
 
+  test("Test student, researcher, class, section cubes") {
+    val jsonString : String =
+      s"""
+         |{
+         |    "cube": "student_performance",
+         |    "selectFields": [
+         |        {
+         |            "field": "Student ID"
+         |        },
+         |        {
+         |            "field": "Researcher ID"
+         |        },
+         |        {
+         |            "field": "Class ID"
+         |        },
+         |        {
+         |            "field": "Section ID"
+         |        },
+         |        {
+         |            "field": "Total Marks"
+         |        }
+         |    ],
+         |    "filterExpressions": [
+         |        {
+         |            "field": "Day",
+         |            "operator": "between",
+         |            "from": "$fromDate",
+         |            "to": "$toDate"
+         |        },
+         |        {
+         |            "field": "Student ID",
+         |            "operator": "=",
+         |            "value": "213"
+         |        }
+         |    ]
+         |}
+         |""".stripMargin
 
+    val request: ReportingRequest = getReportingRequestSync(jsonString, StudentSchema)
+
+    val registryBuilder = new RegistryBuilder
+    new SampleFactSchemaRegistrationFactory().register(registryBuilder)
+    new SampleDimensionSchemaRegistrationFactory().register(registryBuilder)
+    val registry = registryBuilder.build()
+
+    val res = getRequestModel(request, registry)
+    assert(res.isSuccess, res.errorMessage("Building request model failed"))
+  }
+
+  test("Test dim driven query: student, researcher, class, section") {
+    val jsonString : String =
+      s"""
+         |{
+         |    "cube": "student_performance",
+         |    "isDimDriven": true,
+         |    "selectFields": [
+         |        {
+         |            "field": "Student Name"
+         |        },
+         |        {
+         |            "field": "Researcher Name"
+         |        },
+         |        {
+         |            "field": "Class Name"
+         |        },
+         |        {
+         |            "field": "Section Name"
+         |        }
+         |    ],
+         |    "filterExpressions": [
+         |        {
+         |            "field": "Day",
+         |            "operator": "between",
+         |            "from": "$fromDate",
+         |            "to": "$toDate"
+         |        },
+         |        {
+         |            "field": "Student ID",
+         |            "operator": "=",
+         |            "value": "213"
+         |        }
+         |    ]
+         |}
+         |""".stripMargin
+
+    val request: ReportingRequest = getReportingRequestSync(jsonString, StudentSchema)
+
+    val registryBuilder = new RegistryBuilder
+    new SampleFactSchemaRegistrationFactory().register(registryBuilder)
+    new SampleDimensionSchemaRegistrationFactory().register(registryBuilder)
+    val registry = registryBuilder.build()
+
+    val res = getRequestModel(request, registry)
+    assert(res.isSuccess, res.errorMessage("Building request model failed"))
+
+//    val queryPipelineTry = generatePipeline(res.toOption.get)
+//    assert(queryPipelineTry.isSuccess, queryPipelineTry.errorMessage("Fail to get the query pipeline"))
+//
+//    val result =  queryPipelineTry.toOption.get.queryChain.drivingQuery.asInstanceOf[OracleQuery].asString
+//    println(result)
+  }
+
+}
+
+class ExampleRequestModelTest extends AnyFunSuite with Matchers with BaseOracleQueryGeneratorTest {
+  def getExampleRegistry(): Registry = {
+    val registryBuilder = new RegistryBuilder
+    new SampleDimensionSchemaRegistrationFactory().register(registryBuilder)
+    new SampleFactSchemaRegistrationFactory().register(registryBuilder)
+    val registry = registryBuilder.build()
+    registry
+  }
+
+  lazy val exampleRegistry: Registry = getExampleRegistry()
+
+  test("Testing same level join") {
+    val jsonString : String =
+      s"""
+         |{
+         |    "cube": "student_performance",
+         |    "isDimDriven": true,
+         |    "selectFields": [
+         |        {
+         |            "field": "Student Name"
+         |        },
+         |        {
+         |            "field": "Researcher Name"
+         |        }
+         |    ],
+         |    "filterExpressions": [
+         |        {
+         |            "field": "Day",
+         |            "operator": "between",
+         |            "from": "$fromDate",
+         |            "to": "$toDate"
+         |        },
+         |        {
+         |            "field": "Student ID",
+         |            "operator": "=",
+         |            "value": "213"
+         |        }
+         |    ]
+         |}
+         |""".stripMargin
+
+    val request: ReportingRequest = getReportingRequestSync(jsonString, StudentSchema)
+    val registry = exampleRegistry
+    val res = getRequestModel(request, registry)
+    assert(res.isSuccess, s"should not fail on same level join")
+
+    val queryPipelineTry = generatePipeline(res.toOption.get)
+    assert(queryPipelineTry.isSuccess, queryPipelineTry.errorMessage("Fail to get the query pipeline"))
+
+    val queryPipeline = queryPipelineTry.toOption.get
+    val result = queryPipeline.queryChain.drivingQuery.asString
+    println(result)
+  }
 }
 
