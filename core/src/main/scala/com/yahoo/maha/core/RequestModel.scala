@@ -823,10 +823,23 @@ object RequestModel extends Logging {
           val dimensionCandidatesPreValidation: SortedSet[DimensionCandidate] = {
             val intermediateCandidates = new mutable.TreeSet[DimensionCandidate]()
             val upperJoinCandidates = new mutable.TreeSet[PublicDimension]()
-            finalAllRequestedDimensionPrimaryKeyAliases
+            var indexedSeqVar = finalAllRequestedDimensionPrimaryKeyAliases
               .flatMap(f => registry.getPkDimensionUsingFactTable(f, Some(publicFact.dimRevision), publicFact.dimToRevisionMap))
               .toIndexedSeq
               .sortWith((a, b) => b.dimLevel < a.dimLevel)
+
+            var dimIdx = 0
+            while(dimIdx < indexedSeqVar.size - 1){
+              val currentDim = indexedSeqVar(dimIdx)
+              val nextDim = indexedSeqVar(dimIdx + 1)
+              if(currentDim.dimLevel == nextDim.dimLevel && nextDim.foreignKeyByAlias.contains(currentDim.primaryKeyByAlias)){
+                indexedSeqVar = indexedSeqVar.updated(dimIdx + 1, currentDim)
+                indexedSeqVar = indexedSeqVar.updated(dimIdx, nextDim)
+              }
+              dimIdx += 1
+            }
+
+            indexedSeqVar
               .foreach {
                 publicDimOption =>
                   //used to identify the highest level dimension
@@ -924,7 +937,7 @@ object RequestModel extends Logging {
                               foreignkeyAlias += alias
                               val pd = finalAllRequestedDimsMap(alias)
                               //only keep lower join candidates
-                              if(pd.dimLevel != publicDim.dimLevel && pd.dimLevel <= prevLevel) {
+                              if(pd.dimLevel <= publicDim.dimLevel) {
                                 lowerJoinCandidates += finalAllRequestedDimsMap(alias)
                               }
                             }
@@ -938,7 +951,7 @@ object RequestModel extends Logging {
 
                     // always include primary key in dimension table for join
                     val requestedDimAliases = foreignkeyAlias ++ fields + publicDim.primaryKeyByAlias
-                    val filteredUpper = upperJoinCandidates.filter(pd => pd.dimLevel != publicDim.dimLevel && pd.dimLevel >= aboveLevel)
+                    val filteredUpper = upperJoinCandidates.filter(pd => pd.dimLevel >= publicDim.dimLevel)
 
                     // attempting to find the better upper candidate if exist
                     // ads->adgroup->campaign hierarchy, better upper candidate for campaign is ad
