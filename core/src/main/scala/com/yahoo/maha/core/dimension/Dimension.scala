@@ -934,10 +934,12 @@ trait PublicDimension extends PublicTable {
   def getBaseDim: Dimension
 
   def containsHighCardinalityFilter(f: Filter) : Boolean
+
+  var dimJoinLevel: Int = 0
 }
 
 object PublicDimension {
-  implicit val ordering: Ordering[PublicDimension] = Ordering.by(dc => s"${dc.dimLevel.level}-${dc.name}")
+  implicit val ordering: Ordering[PublicDimension] = Ordering.by(dc => s"${dc.dimLevel.level}-${dc.dimJoinLevel}-${dc.name}")
 }
 
 case class PublicDim (name: String

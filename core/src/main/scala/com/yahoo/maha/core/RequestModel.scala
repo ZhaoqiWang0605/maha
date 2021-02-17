@@ -2,10 +2,12 @@
 // Licensed under the terms of the Apache License 2.0. Please see LICENSE file in project root for terms.
 package com.yahoo.maha.core
 
+import java.util
+
 import com.yahoo.maha.core
 import com.yahoo.maha.core.MetaType.MetaType
 import com.yahoo.maha.core.bucketing.{BucketParams, BucketSelector, CubeBucketSelected}
-import com.yahoo.maha.core.dimension.{PublicDim, PublicDimension, RequiredAlias}
+import com.yahoo.maha.core.dimension.{DimLevel, LevelOne, PublicDim, PublicDimension, RequiredAlias}
 import com.yahoo.maha.core.fact.{BestCandidates, PublicFact, PublicFactCol, PublicFactColumn}
 import com.yahoo.maha.core.registry.{FactRowsCostEstimate, Registry}
 import com.yahoo.maha.core.request.Parameter.Distinct
@@ -60,7 +62,7 @@ case class DimensionRelations(relations: Map[(String, String), Boolean]) {
 }
 
 object DimensionCandidate {
-  implicit val ordering: Ordering[DimensionCandidate] = Ordering.by(dc => s"${dc.dim.dimLevel.level}-${dc.dim.name}")
+  implicit val ordering: Ordering[DimensionCandidate] = Ordering.by(dc => s"${dc.dim.dimLevel.level}-${dc.dim.dimJoinLevel}-${dc.dim.name}")
 }
 
 sealed trait ColumnInfo {
@@ -1029,6 +1031,7 @@ object RequestModel extends Logging {
                     )
                     allRequestedDimAliases ++= requestedDimAliases
                     // Adding current dimension to uppper dimension candidates
+                    publicDim.dimJoinLevel = indexedSeqVar.size - dimOrder
                     upperJoinCandidates+=publicDim
                   }
               }

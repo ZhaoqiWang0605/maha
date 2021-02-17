@@ -6302,6 +6302,30 @@ class ExampleRequestModelTest extends AnyFunSuite with Matchers with BaseOracleQ
     val queryPipeline = queryPipelineTry.toOption.get
     val result = queryPipeline.queryChain.drivingQuery.asString
     println(result)
+
+    val expected =
+      s"""
+         |SELECT  *
+         |      FROM (
+         |          SELECT "Student Name", "Researcher Name", ROWNUM AS ROW_NUMBER
+         |              FROM(SELECT s1.name "Student Name", r0.name "Researcher Name"
+         |                  FROM
+         |               ( (SELECT  researcher_id, name, id
+         |            FROM student
+         |            WHERE (id = 213)
+         |             ) s1
+         |          INNER JOIN
+         |            (SELECT  name, id
+         |            FROM researcher
+         |
+         |             ) r0
+         |              ON( s1.researcher_id = r0.id )
+         |               )
+         |
+         |                  ))
+         |                   WHERE ROW_NUMBER >= 1 AND ROW_NUMBER <= 200
+         |""".stripMargin
+    result should equal(expected)(after being whiteSpaceNormalised)
   }
 }
 
