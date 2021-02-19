@@ -6327,5 +6327,81 @@ class ExampleRequestModelTest extends AnyFunSuite with Matchers with BaseOracleQ
          |""".stripMargin
     result should equal(expected)(after being whiteSpaceNormalised)
   }
+
+  test("Testing 3 same level dim tables join") {
+    val jsonString : String =
+      s"""
+         |{
+         |    "cube": "student_performance",
+         |    "isDimDriven": true,
+         |    "selectFields": [
+         |        {
+         |            "field": "Student Name"
+         |        },
+         |        {
+         |            "field": "Researcher Name"
+         |        },
+         |        {
+         |            "field": "Volunteer Name"
+         |        }
+         |    ],
+         |    "filterExpressions": [
+         |        {
+         |            "field": "Day",
+         |            "operator": "between",
+         |            "from": "$fromDate",
+         |            "to": "$toDate"
+         |        },
+         |        {
+         |            "field": "Student ID",
+         |            "operator": "=",
+         |            "value": "213"
+         |        }
+         |    ]
+         |}
+         |""".stripMargin
+
+    val request: ReportingRequest = getReportingRequestSync(jsonString, StudentSchema)
+    val registry = exampleRegistry
+    val res = getRequestModel(request, registry)
+    assert(res.isSuccess, s"should not fail on same level join")
+
+    val queryPipelineTry = generatePipeline(res.toOption.get)
+    assert(queryPipelineTry.isSuccess, queryPipelineTry.errorMessage("Fail to get the query pipeline"))
+
+    val queryPipeline = queryPipelineTry.toOption.get
+    val result = queryPipeline.queryChain.drivingQuery.asString
+    println(result)
+
+    val expected =
+      s"""
+         |SELECT  *
+         |      FROM (
+         |          SELECT "Student Name", "Researcher Name", "Volunteer Name", ROWNUM AS ROW_NUMBER
+         |              FROM(SELECT s1.name "Student Name", r2.name "Researcher Name", v0.name "Volunteer Name"
+         |                  FROM
+         |               ( (SELECT  researcher_id, volunteer_id, name, id
+         |            FROM student
+         |            WHERE (id = 213)
+         |             ) s1
+         |          INNER JOIN
+         |            (SELECT  name, id
+         |            FROM researcher
+         |
+         |             ) r2
+         |              ON( s1.researcher_id = r2.id )
+         |               INNER JOIN
+         |            (SELECT  name, id
+         |            FROM volunteer
+         |
+         |             ) v0
+         |              ON( s1.volunteer_id = v0.id )
+         |               )
+         |
+         |                  ))
+         |                   WHERE ROW_NUMBER >= 1 AND ROW_NUMBER <= 200
+         |""".stripMargin
+    result should equal(expected)(after being whiteSpaceNormalised)
+  }
 }
 
