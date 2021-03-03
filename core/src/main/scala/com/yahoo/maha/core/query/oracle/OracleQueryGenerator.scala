@@ -491,6 +491,7 @@ b. Dim Driven
         // Sync Query Gen Block
         var hasPagination = false
         var hasTotalRows = false
+//        val dimsJoinOrder = dims.toIndexedSeq.sortWith((a, b) => a.publicDim.dimJoinLevel < b.publicDim.dimJoinLevel)
         val primaryBundle = dims.last
         val subqueryBundles = dims.dropRight(1)
         val isSubqueryOnlyQuery = subqueryBundles.nonEmpty && subqueryBundles.forall {
